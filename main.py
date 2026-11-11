@@ -1,124 +1,161 @@
+"""PySide6 catalogue application, completed through practical work 39."""
+from __future__ import annotations
+
 import sys
-import psycopg
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QFrame
-from PySide6.QtGui import QFont, QPixmap
+from pathlib import Path
+
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QApplication, QDialog, QFormLayout, QFrame, QHBoxLayout,
+    QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+)
 
-# --- ФУНКЦИЯ ДЛЯ ЗАДАНИЯ 3.1 ---
-def calculate_price(product_id, base_price, cursor):
-    try:
-        # Ищем заказы за предыдущий месяц
-        cursor.execute("""
-            SELECT COUNT(*) FROM order_items oi
-            JOIN orders o ON oi.order_id = o.order_id
-            WHERE oi.product_id = %s
-            AND o.order_date >= CURRENT_DATE - INTERVAL '1 month'
-        """, (product_id,))
-        orders_count = cursor.fetchone()[0]
-        if orders_count == 0:
-            return round(base_price * 0.75, 2) # Скидка 25% с округлением
-    except Exception as e:
-        print(f"Ошибка в calculate_price: {e}")
-    return base_price
+from database import PROJECT_DIR, authenticate, fetch_catalog, initialise_database
 
-class CatalogWindow(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("ФормаДесерт - Каталог")
-        self.resize(800, 600)
-        
-        # Стиль: Шрифт Calibri (Задание 3.4)
-        self.setStyleSheet("background-color: #f9f9f9; font-family: 'Calibri';")
-        
-        layout = QVBoxLayout()
-        
-        title = QLabel("Каталог товаров")
-        title.setFont(QFont("Calibri", 24, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
+
+RESOURCES = PROJECT_DIR / "resources"
+IMAGES = RESOURCES / "images"
+PLACEHOLDER = RESOURCES / "picture.png"
+LOGO = RESOURCES / "Мир велосипедов.png"
+ICON = RESOURCES / "Мир велосипедов.ico"
+
+
+class LoginDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.user = None
+        self.setWindowTitle("Вход — Мир велосипедов")
+        self.setMinimumWidth(360)
+        layout = QVBoxLayout(self)
+        title = QLabel("Вход в систему")
+        title.setObjectName("title")
         layout.addWidget(title)
-        
+        form = QFormLayout()
+        self.login_edit = QLineEdit()
+        self.login_edit.setPlaceholderText("Например: admin или client01")
+        form.addRow("Логин:", self.login_edit)
+        layout.addLayout(form)
+        buttons = QHBoxLayout()
+        login_button = QPushButton("Войти")
+        login_button.clicked.connect(self.log_in)
+        guest_button = QPushButton("Продолжить как гость")
+        guest_button.clicked.connect(self.accept)
+        buttons.addWidget(login_button)
+        buttons.addWidget(guest_button)
+        layout.addLayout(buttons)
+        self.login_edit.returnPressed.connect(self.log_in)
+
+    def log_in(self) -> None:
+        self.user = authenticate(self.login_edit.text())
+        if self.user is None:
+            QMessageBox.warning(self, "Вход", "Пользователь с таким логином не найден.")
+            return
+        self.accept()
+
+
+class ProductCard(QFrame):
+    def __init__(self, product) -> None:
+        super().__init__()
+        self.setObjectName("productCard")
+        self.setFrameShape(QFrame.StyledPanel)
+        layout = QHBoxLayout(self)
+        image = QLabel()
+        image.setFixedSize(150, 110)
+        image.setAlignment(Qt.AlignCenter)
+        image_path = IMAGES / (product["image_name"] or "")
+        pixmap = QPixmap(str(image_path if image_path.exists() else PLACEHOLDER))
+        image.setPixmap(pixmap.scaled(145, 105, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        layout.addWidget(image)
+        info = QVBoxLayout()
+        name = QLabel(product["name"])
+        name.setObjectName("productName")
+        info.addWidget(name)
+        info.addWidget(QLabel(f"{product['category']} · {product['subcategory']}"))
+        info.addWidget(QLabel(f"Производитель: {product['manufacturer']}"))
+        info.addWidget(QLabel(product["composition"]))
+        stock = "Нет на складе" if product["quantity"] == 0 else f"В наличии: {product['quantity']} шт."
+        info.addWidget(QLabel(stock))
+        layout.addLayout(info, 1)
+        price = QLabel(f"от {float(product['minimum_price'] or product['base_price']):,.2f} ₽".replace(",", " "))
+        price.setObjectName("price")
+        layout.addWidget(price, alignment=Qt.AlignRight | Qt.AlignVCenter)
+
+
+class MainWindow(QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.current_user = None
+        self.setWindowTitle("Мир велосипедов")
+        self.setWindowIcon(QIcon(str(ICON)))
+        self.resize(980, 720)
+        central = QWidget()
+        self.setCentralWidget(central)
+        root = QVBoxLayout(central)
+        header = QHBoxLayout()
+        logo = QLabel()
+        logo_pixmap = QPixmap(str(LOGO))
+        logo.setPixmap(logo_pixmap.scaledToHeight(55, Qt.SmoothTransformation))
+        header.addWidget(logo)
+        header.addStretch()
+        self.user_label = QLabel("Гость")
+        header.addWidget(self.user_label)
+        self.auth_button = QPushButton("Войти")
+        self.auth_button.clicked.connect(self.open_login)
+        header.addWidget(self.auth_button)
+        root.addLayout(header)
+        self.catalog_layout = QVBoxLayout()
+        self.catalog_layout.setAlignment(Qt.AlignTop)
+        container = QWidget()
+        container.setLayout(self.catalog_layout)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        self.scroll_content = QWidget()
-        self.scroll_layout = QVBoxLayout(self.scroll_content)
-        scroll.setWidget(self.scroll_content)
-        layout.addWidget(scroll)
-        
-        self.setLayout(layout)
-        self.load_data()
+        scroll.setWidget(container)
+        root.addWidget(scroll, 1)
+        self.statusBar().showMessage("Каталог загружен")
+        self.load_catalog()
 
-    def load_data(self):
-        try:
-            # Подключение к вашей БД
-            conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT p.product_id, p.name, p.price, COALESCE(SUM(si.quantity), 0) AS total_quantity
-                FROM products p
-                LEFT JOIN stock_items si ON p.product_id = si.product_id
-                GROUP BY p.product_id
-                LIMIT 5;
-            """)
-            products = cursor.fetchall()
-            
-            for prod in products:
-                p_id, name, price, quantity = prod
-                final_price = calculate_price(p_id, price, cursor)
-                self.create_card(name, final_price, quantity)
-                
-            conn.close()
-        except Exception as e:
-            print(f"Ошибка БД: {e}")
-            # Если БД не подключилась, показываем заглушки
-            self.create_card("Тестовый торт", 1000.0, 2)
+    def load_catalog(self) -> None:
+        while self.catalog_layout.count():
+            item = self.catalog_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        products = fetch_catalog()
+        for product in products:
+            self.catalog_layout.addWidget(ProductCard(product))
+        self.statusBar().showMessage(f"Найдено моделей: {len(products)}")
 
-    def create_card(self, name, price, quantity):
-        card = QFrame()
-        card.setFrameShape(QFrame.StyledPanel)
-        card.setStyleSheet("background-color: white; border: 1px solid #ddd; border-radius: 8px; margin: 5px;")
-        
-        # Подсветка #ff8080 при остатке <= 3 (Задание 3.4)
-        if quantity <= 3:
-            card.setStyleSheet("background-color: #ff8080; border: 1px solid #ddd; border-radius: 8px; margin: 5px;")
-            
-        card_layout = QHBoxLayout()
-        
-        # Изображение слева (Задание 3.3)
-        img_label = QLabel()
-        pixmap = QPixmap("picture.png")
-        if pixmap.isNull():
-            img_label.setText("Нет\nфото")
-            img_label.setFixedSize(100, 100)
-            img_label.setStyleSheet("background-color: #eee; text-align: center;")
-            img_label.setAlignment(Qt.AlignCenter)
-        else:
-            img_label.setPixmap(pixmap.scaled(100, 100, Qt.KeepAspectRatio))
-        card_layout.addWidget(img_label)
-        
-        # Текст посередине
-        text_layout = QVBoxLayout()
-        title_label = QLabel(f"Производство: Кондитерская\n{name}")
-        title_label.setFont(QFont("Calibri", 12, QFont.Bold))
-        
-        info_label = QLabel(f"Категория: Выпечка\nКоличество: {quantity}\nСостав: Мука, сахар, яйца")
-        info_label.setFont(QFont("Calibri", 10))
-        
-        text_layout.addWidget(title_label)
-        text_layout.addWidget(info_label)
-        card_layout.addLayout(text_layout)
-        
-        # Цена справа (Задание 3.3)
-        price_label = QLabel(f"{price} руб.")
-        price_label.setFont(QFont("Calibri", 14, QFont.Bold))
-        price_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        card_layout.addWidget(price_label)
-        
-        card.setLayout(card_layout)
-        self.scroll_layout.addWidget(card)
+    def open_login(self) -> None:
+        dialog = LoginDialog(self)
+        if dialog.exec():
+            self.current_user = dialog.user
+            if self.current_user is None:
+                self.user_label.setText("Гость")
+                self.auth_button.setText("Войти")
+            else:
+                fio = f"{self.current_user['last_name']} {self.current_user['first_name']} {self.current_user['patronymic']}"
+                self.user_label.setText(f"{fio} ({self.current_user['role']})")
+                self.auth_button.setText("Сменить пользователя")
 
-if __name__ == '__main__':
+
+def main() -> int:
+    initialise_database()
     app = QApplication(sys.argv)
-    window = CatalogWindow()
+    app.setStyleSheet(
+        """
+        QWidget { font-family: Calibri; font-size: 14px; color: #000000; background: #FFFFFF; }
+        QPushButton { background: #70B2AF; padding: 7px 12px; border: 0; border-radius: 4px; }
+        QPushButton:hover { background: #D2F6E7; }
+        #title, #productName { font-weight: bold; font-size: 18px; }
+        #productCard { border: 1px solid #70B2AF; border-radius: 6px; margin: 4px; padding: 4px; }
+        #price { font-weight: bold; font-size: 16px; }
+        QLineEdit, QComboBox { padding: 6px; border: 1px solid #70B2AF; border-radius: 3px; }
+        """
+    )
+    window = MainWindow()
     window.show()
-    sys.exit(app.exec())
+    return app.exec()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
