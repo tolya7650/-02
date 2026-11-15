@@ -1,4 +1,4 @@
-"""PySide6 catalogue application, completed through practical work 39."""
+"""PySide6 catalogue application."""
 from __future__ import annotations
 
 import sys
@@ -13,12 +13,28 @@ from PySide6.QtWidgets import (
 
 from database import PROJECT_DIR, authenticate, fetch_catalog, initialise_database
 
-
+# Указываем пути к картинкам (если их нет, программа не сломается)
 RESOURCES = PROJECT_DIR / "resources"
 IMAGES = RESOURCES / "images"
 PLACEHOLDER = RESOURCES / "picture.png"
 LOGO = RESOURCES / "Мир велосипедов.png"
 ICON = RESOURCES / "Мир велосипедов.ico"
+
+# --- ФУНКЦИЯ СКИДКИ (для Задания 2.1) ---
+def calculate_price(product_id, base_price, cursor):
+    try:
+        cursor.execute("""
+            SELECT COUNT(*) FROM order_items oi
+            JOIN orders o ON oi.order_id = o.order_id
+            WHERE oi.product_id = %s
+            AND o.order_date >= CURRENT_DATE - INTERVAL '1 month'
+        """, (product_id,))
+        orders_count = cursor.fetchone()[0]
+        if orders_count == 0:
+            return round(float(base_price) * 0.75, 2)
+    except Exception:
+        pass
+    return float(base_price)
 
 
 class LoginDialog(QDialog):
@@ -59,7 +75,14 @@ class ProductCard(QFrame):
         super().__init__()
         self.setObjectName("productCard")
         self.setFrameShape(QFrame.StyledPanel)
+        
+        # --- ПОДСВЕТКА (для Задания 3.1) ---
+        if product["quantity"] <= 3:
+            self.setStyleSheet("background-color: #ff8080; border: 1px solid #70B2AF; border-radius: 6px; margin: 4px; padding: 4px;")
+            
         layout = QHBoxLayout(self)
+        
+        # 1. Изображение слева
         image = QLabel()
         image.setFixedSize(150, 110)
         image.setAlignment(Qt.AlignCenter)
@@ -67,6 +90,8 @@ class ProductCard(QFrame):
         pixmap = QPixmap(str(image_path if image_path.exists() else PLACEHOLDER))
         image.setPixmap(pixmap.scaled(145, 105, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         layout.addWidget(image)
+        
+        # 2. Информация по центру
         info = QVBoxLayout()
         name = QLabel(product["name"])
         name.setObjectName("productName")
@@ -77,6 +102,8 @@ class ProductCard(QFrame):
         stock = "Нет на складе" if product["quantity"] == 0 else f"В наличии: {product['quantity']} шт."
         info.addWidget(QLabel(stock))
         layout.addLayout(info, 1)
+        
+        # 3. Цена справа
         price = QLabel(f"от {float(product['minimum_price'] or product['base_price']):,.2f} ₽".replace(",", " "))
         price.setObjectName("price")
         layout.addWidget(price, alignment=Qt.AlignRight | Qt.AlignVCenter)
@@ -87,16 +114,22 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.current_user = None
         self.setWindowTitle("Мир велосипедов")
-        self.setWindowIcon(QIcon(str(ICON)))
+        if ICON.exists():
+            self.setWindowIcon(QIcon(str(ICON)))
         self.resize(980, 720)
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
         header = QHBoxLayout()
+        
         logo = QLabel()
         logo_pixmap = QPixmap(str(LOGO))
-        logo.setPixmap(logo_pixmap.scaledToHeight(55, Qt.SmoothTransformation))
+        if LOGO.exists():
+            logo.setPixmap(logo_pixmap.scaledToHeight(55, Qt.SmoothTransformation))
+        else:
+            logo.setText("Мир велосипедов")
         header.addWidget(logo)
+        
         header.addStretch()
         self.user_label = QLabel("Гость")
         header.addWidget(self.user_label)
@@ -104,6 +137,7 @@ class MainWindow(QMainWindow):
         self.auth_button.clicked.connect(self.open_login)
         header.addWidget(self.auth_button)
         root.addLayout(header)
+        
         self.catalog_layout = QVBoxLayout()
         self.catalog_layout.setAlignment(Qt.AlignTop)
         container = QWidget()
@@ -139,7 +173,6 @@ class MainWindow(QMainWindow):
 
 
 def main() -> int:
-    initialise_database()
     app = QApplication(sys.argv)
     app.setStyleSheet(
         """
