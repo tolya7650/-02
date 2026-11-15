@@ -7,11 +7,11 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QFormLayout, QFrame, QHBoxLayout,
-    QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QApplication, QMainWindow, QStackedWidget, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
+    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit
 )
 
-from database import PROJECT_DIR, authenticate, fetch_catalog, initialise_database
+from database import PROJECT_DIR, fetch_catalog, authenticate
 
 RESOURCES = PROJECT_DIR / "resources"
 IMAGES = RESOURCES / "images"
@@ -19,20 +19,6 @@ PLACEHOLDER = RESOURCES / "picture.png"
 LOGO = RESOURCES / "Мир велосипедов.png"
 ICON = RESOURCES / "Мир велосипедов.ico"
 
-def calculate_price(product_id, base_price, cursor):
-    try:
-        cursor.execute("""
-            SELECT COUNT(*) FROM order_items oi
-            JOIN orders o ON oi.order_id = o.order_id
-            WHERE oi.product_id = %s
-            AND o.order_date >= CURRENT_DATE - INTERVAL '1 month'
-        """, (product_id,))
-        orders_count = cursor.fetchone()[0]
-        if orders_count == 0:
-            return round(float(base_price) * 0.75, 2)
-    except Exception:
-        pass
-    return float(base_price)
 
 class ProductCard(QFrame):
     def __init__(self, product) -> None:
@@ -68,6 +54,7 @@ class ProductCard(QFrame):
         price.setObjectName("price")
         layout.addWidget(price, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
+
 class MainWindow(QMainWindow):
     def __init__(self, user_id=None, role_id=None, full_name=None) -> None:
         super().__init__()
@@ -79,11 +66,29 @@ class MainWindow(QMainWindow):
         if ICON.exists():
             self.setWindowIcon(QIcon(str(ICON)))
         self.resize(980, 720)
-        central = QWidget()
-        self.setCentralWidget(central)
-        root = QVBoxLayout(central)
         
-        # Шапка с логотипом и ФИО
+        # --- СОЗДАЕМ QStackedWidget (Задание 1) ---
+        self.stacked_widget = QStackedWidget()
+        
+        # --- СОЗДАЕМ СТРАНИЦЫ (Задание 2) ---
+        self.catalog_page = QWidget()
+        self.product_page = QWidget()
+        self.orders_page = QWidget()
+        
+        self.setup_catalog_page()
+        self.setup_product_page()
+        self.setup_orders_page()
+        
+        self.stacked_widget.addWidget(self.catalog_page)  # 0
+        self.stacked_widget.addWidget(self.product_page)  # 1
+        self.stacked_widget.addWidget(self.orders_page)   # 2
+        
+        # --- КНОПКА «НАЗАД» (Задание 3) ---
+        self.back_button = QPushButton("Назад")
+        self.back_button.clicked.connect(self.go_back)
+        self.back_button.setVisible(False)
+        
+        # --- ШАПКА С КНОПКАМИ ПЕРЕХОДА ---
         header = QHBoxLayout()
         logo = QLabel()
         logo_pixmap = QPixmap(str(LOGO))
@@ -95,7 +100,15 @@ class MainWindow(QMainWindow):
         
         header.addStretch()
         
-        # Вывод ФИО (если пользователь авторизован)
+        # Кнопки для теста навигации
+        self.btn_product = QPushButton("Карточка товара")
+        self.btn_product.clicked.connect(lambda: self.switch_page(1))
+        header.addWidget(self.btn_product)
+        
+        self.btn_orders = QPushButton("Заказы")
+        self.btn_orders.clicked.connect(lambda: self.switch_page(2))
+        header.addWidget(self.btn_orders)
+        
         if self.full_name:
             self.name_label = QLabel(f"ФИО: {self.full_name}")
             self.name_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-right: 15px;")
@@ -103,18 +116,59 @@ class MainWindow(QMainWindow):
         else:
             self.name_label = QLabel("Гость")
             header.addWidget(self.name_label)
-            
-        root.addLayout(header)
         
+        layout = QVBoxLayout()
+        layout.addLayout(header)
+        layout.addWidget(self.back_button)
+        layout.addWidget(self.stacked_widget)
+        
+        central_widget = QWidget()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+        
+        self.switch_page(0)
+        self.load_catalog()
+
+    def setup_catalog_page(self):
+        layout = QVBoxLayout(self.catalog_page)
+        layout.setAlignment(Qt.AlignTop)
         self.catalog_layout = QVBoxLayout()
         self.catalog_layout.setAlignment(Qt.AlignTop)
+        
         container = QWidget()
         container.setLayout(self.catalog_layout)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(container)
-        root.addWidget(scroll, 1)
-        self.statusBar().showMessage("Каталог загружен")
+        layout.addWidget(scroll)
+
+    def setup_product_page(self):
+        layout = QVBoxLayout(self.product_page)
+        layout.addWidget(QLabel("Страница: Карточка товара"))
+
+    def setup_orders_page(self):
+        layout = QVBoxLayout(self.orders_page)
+        layout.addWidget(QLabel("Страница: Заказы"))
+
+    def switch_page(self, index):
+        self.stacked_widget.setCurrentIndex(index)
+        titles = ["Мир велосипедов — Каталог", "Мир велосипедов — Карточка товара", "Мир велосипедов — Заказы"]
+        self.setWindowTitle(titles[index])
+        
+        if index == 0:
+            self.back_button.setVisible(False)
+        else:
+            self.back_button.setVisible(True)
+            
+        if index == 0:
+            self.refresh_catalog()
+
+    def go_back(self):
+        current_index = self.stacked_widget.currentIndex()
+        if current_index > 0:
+            self.switch_page(current_index - 1)
+
+    def refresh_catalog(self):
         self.load_catalog()
 
     def load_catalog(self) -> None:
@@ -125,7 +179,7 @@ class MainWindow(QMainWindow):
         products = fetch_catalog()
         for product in products:
             self.catalog_layout.addWidget(ProductCard(product))
-        self.statusBar().showMessage(f"Найдено моделей: {len(products)}")
+
 
 def main() -> int:
     app = QApplication(sys.argv)
@@ -147,6 +201,7 @@ def main() -> int:
     if login_win.exec():
         return app.exec()
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
