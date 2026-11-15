@@ -24,8 +24,10 @@ class LoginWindow(QDialog):
 
     def check_login(self):
         login = self.login_input.text().strip()
+        
+        # --- ЗАДАНИЕ 1.1: Error для пустого логина ---
         if not login:
-            QMessageBox.warning(self, "Ошибка", "Введите логин")
+            QMessageBox.critical(self, "Ошибка", "Введите логин")
             return
         
         try:
@@ -37,18 +39,21 @@ class LoginWindow(QDialog):
             
             if result:
                 user_id, role_id, last_name, first_name, middle_name = result
-                # Собираем ФИО (если отчество None, не добавляем его)
                 parts = [last_name, first_name]
                 if middle_name:
                     parts.append(middle_name)
                 full_name = " ".join(parts)
+                
+                # --- ЗАДАНИЕ 3: Information при успешном входе ---
+                QMessageBox.information(self, "Информация", f"Добро пожаловать, {full_name}!")
                 
                 self.accept()
                 from main import MainWindow
                 self.main_window = MainWindow(user_id=user_id, role_id=role_id, full_name=full_name)
                 self.main_window.show()
             else:
-                QMessageBox.warning(self, "Ошибка", "Пользователь не найден")
+                # --- ЗАДАНИЕ 1.2: Error для неверного логина ---
+                QMessageBox.critical(self, "Ошибка", "Пользователь не найден")
                 
         except Exception as e:
-            QMessageBox.warning(self, "Ошибка", f"Ошибка БД: {e}")
+            QMessageBox.critical(self, "Ошибка", f"Ошибка БД: {e}") 

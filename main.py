@@ -67,10 +67,8 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(ICON)))
         self.resize(980, 720)
         
-        # --- СОЗДАЕМ QStackedWidget (Задание 1) ---
         self.stacked_widget = QStackedWidget()
         
-        # --- СОЗДАЕМ СТРАНИЦЫ (Задание 2) ---
         self.catalog_page = QWidget()
         self.product_page = QWidget()
         self.orders_page = QWidget()
@@ -83,12 +81,10 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.product_page)  # 1
         self.stacked_widget.addWidget(self.orders_page)   # 2
         
-        # --- КНОПКА «НАЗАД» (Задание 3) ---
         self.back_button = QPushButton("Назад")
         self.back_button.clicked.connect(self.go_back)
         self.back_button.setVisible(False)
         
-        # --- ШАПКА С КНОПКАМИ ПЕРЕХОДА ---
         header = QHBoxLayout()
         logo = QLabel()
         logo_pixmap = QPixmap(str(LOGO))
@@ -100,7 +96,6 @@ class MainWindow(QMainWindow):
         
         header.addStretch()
         
-        # Кнопки для теста навигации
         self.btn_product = QPushButton("Карточка товара")
         self.btn_product.clicked.connect(lambda: self.switch_page(1))
         header.addWidget(self.btn_product)
@@ -128,6 +123,18 @@ class MainWindow(QMainWindow):
         
         self.switch_page(0)
         self.load_catalog()
+
+    # --- ЗАДАНИЕ 2: Warning при выходе ---
+    def closeEvent(self, event):
+        reply = QMessageBox.warning(
+            self, "Предупреждение", 
+            "Вы уверены, что хотите выйти?", 
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
 
     def setup_catalog_page(self):
         layout = QVBoxLayout(self.catalog_page)
