@@ -69,11 +69,12 @@ class ProductCard(QFrame):
         layout.addWidget(price, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
 class MainWindow(QMainWindow):
-    def __init__(self, user_id=None, role_id=None) -> None:
+    def __init__(self, user_id=None, role_id=None, full_name=None) -> None:
         super().__init__()
-        self.current_user = None
         self.user_id = user_id
         self.role_id = role_id
+        self.full_name = full_name
+        
         self.setWindowTitle("Мир велосипедов")
         if ICON.exists():
             self.setWindowIcon(QIcon(str(ICON)))
@@ -81,8 +82,9 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        header = QHBoxLayout()
         
+        # Шапка с логотипом и ФИО
+        header = QHBoxLayout()
         logo = QLabel()
         logo_pixmap = QPixmap(str(LOGO))
         if LOGO.exists():
@@ -92,11 +94,16 @@ class MainWindow(QMainWindow):
         header.addWidget(logo)
         
         header.addStretch()
-        self.user_label = QLabel("Гость")
-        header.addWidget(self.user_label)
-        self.auth_button = QPushButton("Войти")
-        self.auth_button.clicked.connect(self.open_login)
-        header.addWidget(self.auth_button)
+        
+        # Вывод ФИО (если пользователь авторизован)
+        if self.full_name:
+            self.name_label = QLabel(f"ФИО: {self.full_name}")
+            self.name_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-right: 15px;")
+            header.addWidget(self.name_label)
+        else:
+            self.name_label = QLabel("Гость")
+            header.addWidget(self.name_label)
+            
         root.addLayout(header)
         
         self.catalog_layout = QVBoxLayout()
@@ -119,50 +126,6 @@ class MainWindow(QMainWindow):
         for product in products:
             self.catalog_layout.addWidget(ProductCard(product))
         self.statusBar().showMessage(f"Найдено моделей: {len(products)}")
-
-    def open_login(self) -> None:
-        dialog = LoginDialog(self)
-        if dialog.exec():
-            self.current_user = dialog.user
-            if self.current_user is None:
-                self.user_label.setText("Гость")
-                self.auth_button.setText("Войти")
-            else:
-                fio = f"{self.current_user['last_name']} {self.current_user['first_name']} {self.current_user['patronymic']}"
-                self.user_label.setText(f"{fio} ({self.current_user['role']})")
-                self.auth_button.setText("Сменить пользователя")
-
-class LoginDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.user = None
-        self.setWindowTitle("Вход — Мир велосипедов")
-        self.setMinimumWidth(360)
-        layout = QVBoxLayout(self)
-        title = QLabel("Вход в систему")
-        title.setObjectName("title")
-        layout.addWidget(title)
-        form = QFormLayout()
-        self.login_edit = QLineEdit()
-        self.login_edit.setPlaceholderText("Например: admin или client01")
-        form.addRow("Логин:", self.login_edit)
-        layout.addLayout(form)
-        buttons = QHBoxLayout()
-        login_button = QPushButton("Войти")
-        login_button.clicked.connect(self.log_in)
-        guest_button = QPushButton("Продолжить как гость")
-        guest_button.clicked.connect(self.accept)
-        buttons.addWidget(login_button)
-        buttons.addWidget(guest_button)
-        layout.addLayout(buttons)
-        self.login_edit.returnPressed.connect(self.log_in)
-
-    def log_in(self) -> None:
-        self.user = authenticate(self.login_edit.text())
-        if self.user is None:
-            QMessageBox.warning(self, "Вход", "Пользователь с таким логином не найден.")
-            return
-        self.accept()
 
 def main() -> int:
     app = QApplication(sys.argv)

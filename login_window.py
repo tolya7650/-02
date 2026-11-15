@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import QDialog, QLineEdit, QPushButton, QVBoxLayout, QLabel, QMessageBox
-from database import authenticate
+import psycopg
 
 class LoginWindow(QDialog):
-    def __init__(self):  # <-- Вот здесь мы убрали 'db'
+    def __init__(self):
         super().__init__()
         self.setWindowTitle("Авторизация")
         self.main_window = None
@@ -28,11 +28,27 @@ class LoginWindow(QDialog):
             QMessageBox.warning(self, "Ошибка", "Введите логин")
             return
         
-        user_data = authenticate(login)
-        if user_data:
-            self.accept()
-            from main import MainWindow
-            self.main_window = MainWindow(user_id=user_data['user_id'], role_id=1)
-            self.main_window.show()
-        else:
-            QMessageBox.warning(self, "Ошибка", "Пользователь не найден")
+        try:
+            conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id, role_id, last_name, first_name, middle_name FROM users WHERE login = %s", (login,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                user_id, role_id, last_name, first_name, middle_name = result
+                # Собираем ФИО (если отчество None, не добавляем его)
+                parts = [last_name, first_name]
+                if middle_name:
+                    parts.append(middle_name)
+                full_name = " ".join(parts)
+                
+                self.accept()
+                from main import MainWindow
+                self.main_window = MainWindow(user_id=user_id, role_id=role_id, full_name=full_name)
+                self.main_window.show()
+            else:
+                QMessageBox.warning(self, "Ошибка", "Пользователь не найден")
+                
+        except Exception as e:
+            QMessageBox.warning(self, "Ошибка", f"Ошибка БД: {e}")
