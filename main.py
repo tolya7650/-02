@@ -13,14 +13,12 @@ from PySide6.QtWidgets import (
 
 from database import PROJECT_DIR, authenticate, fetch_catalog, initialise_database
 
-# Указываем пути к картинкам (если их нет, программа не сломается)
 RESOURCES = PROJECT_DIR / "resources"
 IMAGES = RESOURCES / "images"
 PLACEHOLDER = RESOURCES / "picture.png"
 LOGO = RESOURCES / "Мир велосипедов.png"
 ICON = RESOURCES / "Мир велосипедов.ico"
 
-# --- ФУНКЦИЯ СКИДКИ (для Задания 2.1) ---
 def calculate_price(product_id, base_price, cursor):
     try:
         cursor.execute("""
@@ -36,53 +34,17 @@ def calculate_price(product_id, base_price, cursor):
         pass
     return float(base_price)
 
-
-class LoginDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.user = None
-        self.setWindowTitle("Вход — Мир велосипедов")
-        self.setMinimumWidth(360)
-        layout = QVBoxLayout(self)
-        title = QLabel("Вход в систему")
-        title.setObjectName("title")
-        layout.addWidget(title)
-        form = QFormLayout()
-        self.login_edit = QLineEdit()
-        self.login_edit.setPlaceholderText("Например: admin или client01")
-        form.addRow("Логин:", self.login_edit)
-        layout.addLayout(form)
-        buttons = QHBoxLayout()
-        login_button = QPushButton("Войти")
-        login_button.clicked.connect(self.log_in)
-        guest_button = QPushButton("Продолжить как гость")
-        guest_button.clicked.connect(self.accept)
-        buttons.addWidget(login_button)
-        buttons.addWidget(guest_button)
-        layout.addLayout(buttons)
-        self.login_edit.returnPressed.connect(self.log_in)
-
-    def log_in(self) -> None:
-        self.user = authenticate(self.login_edit.text())
-        if self.user is None:
-            QMessageBox.warning(self, "Вход", "Пользователь с таким логином не найден.")
-            return
-        self.accept()
-
-
 class ProductCard(QFrame):
     def __init__(self, product) -> None:
         super().__init__()
         self.setObjectName("productCard")
         self.setFrameShape(QFrame.StyledPanel)
         
-        # --- ПОДСВЕТКА (для Задания 3.1) ---
         if product["quantity"] <= 3:
             self.setStyleSheet("background-color: #ff8080; border: 1px solid #70B2AF; border-radius: 6px; margin: 4px; padding: 4px;")
             
         layout = QHBoxLayout(self)
         
-        # 1. Изображение слева
         image = QLabel()
         image.setFixedSize(150, 110)
         image.setAlignment(Qt.AlignCenter)
@@ -91,7 +53,6 @@ class ProductCard(QFrame):
         image.setPixmap(pixmap.scaled(145, 105, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         layout.addWidget(image)
         
-        # 2. Информация по центру
         info = QVBoxLayout()
         name = QLabel(product["name"])
         name.setObjectName("productName")
@@ -103,16 +64,16 @@ class ProductCard(QFrame):
         info.addWidget(QLabel(stock))
         layout.addLayout(info, 1)
         
-        # 3. Цена справа
         price = QLabel(f"от {float(product['minimum_price'] or product['base_price']):,.2f} ₽".replace(",", " "))
         price.setObjectName("price")
         layout.addWidget(price, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, user_id=None, role_id=None) -> None:
         super().__init__()
         self.current_user = None
+        self.user_id = user_id
+        self.role_id = role_id
         self.setWindowTitle("Мир велосипедов")
         if ICON.exists():
             self.setWindowIcon(QIcon(str(ICON)))
@@ -171,6 +132,37 @@ class MainWindow(QMainWindow):
                 self.user_label.setText(f"{fio} ({self.current_user['role']})")
                 self.auth_button.setText("Сменить пользователя")
 
+class LoginDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.user = None
+        self.setWindowTitle("Вход — Мир велосипедов")
+        self.setMinimumWidth(360)
+        layout = QVBoxLayout(self)
+        title = QLabel("Вход в систему")
+        title.setObjectName("title")
+        layout.addWidget(title)
+        form = QFormLayout()
+        self.login_edit = QLineEdit()
+        self.login_edit.setPlaceholderText("Например: admin или client01")
+        form.addRow("Логин:", self.login_edit)
+        layout.addLayout(form)
+        buttons = QHBoxLayout()
+        login_button = QPushButton("Войти")
+        login_button.clicked.connect(self.log_in)
+        guest_button = QPushButton("Продолжить как гость")
+        guest_button.clicked.connect(self.accept)
+        buttons.addWidget(login_button)
+        buttons.addWidget(guest_button)
+        layout.addLayout(buttons)
+        self.login_edit.returnPressed.connect(self.log_in)
+
+    def log_in(self) -> None:
+        self.user = authenticate(self.login_edit.text())
+        if self.user is None:
+            QMessageBox.warning(self, "Вход", "Пользователь с таким логином не найден.")
+            return
+        self.accept()
 
 def main() -> int:
     app = QApplication(sys.argv)
@@ -185,10 +177,13 @@ def main() -> int:
         QLineEdit, QComboBox { padding: 6px; border: 1px solid #70B2AF; border-radius: 3px; }
         """
     )
-    window = MainWindow()
-    window.show()
-    return app.exec()
-
+    
+    from login_window import LoginWindow
+    login_win = LoginWindow()
+    
+    if login_win.exec():
+        return app.exec()
+    return 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
