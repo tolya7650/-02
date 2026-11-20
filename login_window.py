@@ -1,6 +1,15 @@
 from PySide6.QtWidgets import QDialog, QLineEdit, QPushButton, QVBoxLayout, QLabel, QMessageBox
 import psycopg
 
+# --- Функция валидации (Задание 1) ---
+def validate_login(raw):
+    login = raw.strip()
+    if not login:
+        return None, "Введите логин (пробелы не считаются)"
+    if len(login) < 3:
+        return None, "Логин должен содержать минимум 3 символа"
+    return login, None
+
 class LoginWindow(QDialog):
     def __init__(self):
         super().__init__()
@@ -23,11 +32,10 @@ class LoginWindow(QDialog):
         self.setLayout(layout)
 
     def check_login(self):
-        login = self.login_input.text().strip()
-        
-        # --- ЗАДАНИЕ 1.1: Error для пустого логина ---
-        if not login:
-            QMessageBox.critical(self, "Ошибка", "Введите логин")
+        # --- ЗАДАНИЕ 1: Используем validate_login ---
+        login, error = validate_login(self.login_input.text())
+        if error:
+            QMessageBox.critical(self, "Ошибка", error)
             return
         
         try:
@@ -44,7 +52,7 @@ class LoginWindow(QDialog):
                     parts.append(middle_name)
                 full_name = " ".join(parts)
                 
-                # --- ЗАДАНИЕ 3: Information при успешном входе ---
+                # Information при успешном входе (из прошлой пары)
                 QMessageBox.information(self, "Информация", f"Добро пожаловать, {full_name}!")
                 
                 self.accept()
@@ -52,8 +60,7 @@ class LoginWindow(QDialog):
                 self.main_window = MainWindow(user_id=user_id, role_id=role_id, full_name=full_name)
                 self.main_window.show()
             else:
-                # --- ЗАДАНИЕ 1.2: Error для неверного логина ---
                 QMessageBox.critical(self, "Ошибка", "Пользователь не найден")
                 
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Ошибка БД: {e}") 
+            QMessageBox.critical(self, "Ошибка", f"Ошибка БД: {e}")
