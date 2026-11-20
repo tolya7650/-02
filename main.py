@@ -124,7 +124,6 @@ class MainWindow(QMainWindow):
         self.switch_page(0)
         self.load_catalog()
 
-    # --- ЗАДАНИЕ 2: Warning при выходе ---
     def closeEvent(self, event):
         reply = QMessageBox.warning(
             self, "Предупреждение", 
@@ -139,6 +138,13 @@ class MainWindow(QMainWindow):
     def setup_catalog_page(self):
         layout = QVBoxLayout(self.catalog_page)
         layout.setAlignment(Qt.AlignTop)
+        
+        # --- ЗАДАНИЕ 1: Поле поиска ---
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Поиск...")
+        self.search_input.textChanged.connect(self.load_catalog) # Подключаем к методу загрузки
+        layout.addWidget(self.search_input)
+        
         self.catalog_layout = QVBoxLayout()
         self.catalog_layout.setAlignment(Qt.AlignTop)
         
@@ -179,11 +185,16 @@ class MainWindow(QMainWindow):
         self.load_catalog()
 
     def load_catalog(self) -> None:
+        # Очищаем старые карточки
         while self.catalog_layout.count():
             item = self.catalog_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        products = fetch_catalog()
+        
+        # --- ЗАДАНИЕ 2: Поиск ---
+        search = self.search_input.text().strip()
+        products = fetch_catalog(search_query=search) # Передаем запрос в базу
+        
         for product in products:
             self.catalog_layout.addWidget(ProductCard(product))
 

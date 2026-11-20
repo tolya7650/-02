@@ -3,24 +3,33 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent
 
-# Эта функция теперь ничего не ищет, а просто пропускает шаг инициализации
 def initialise_database():
     pass
 
-def fetch_catalog():
+def fetch_catalog(search_query=""):
     try:
-        # Подключение к вашей базе formadessert
         conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
         cursor = conn.cursor()
         
-        # Делаем запрос к таблице products
-        cursor.execute("""
-            SELECT product_id, name, 'Категория' as category, 'Подкатегория' as subcategory, 
-                   'Производитель' as manufacturer, 'Состав' as composition, 
-                   price as base_price, price as minimum_price, 10 as quantity, NULL as image_name
-            FROM products LIMIT 10;
-        """)
-        
+        if search_query:
+            # Если есть поисковый запрос, ищем по названию и описанию (ILIKE)
+            cursor.execute("""
+                SELECT product_id, name, 'Категория' as category, 'Подкатегория' as subcategory, 
+                       'Производитель' as manufacturer, 'Состав' as composition, 
+                       price as base_price, price as minimum_price, 10 as quantity, NULL as image_name
+                FROM products 
+                WHERE name ILIKE %s OR 'Состав' ILIKE %s
+                LIMIT 20;
+            """, (f"%{search_query}%", f"%{search_query}%"))
+        else:
+            # Если пусто, показываем все товары
+            cursor.execute("""
+                SELECT product_id, name, 'Категория' as category, 'Подкатегория' as subcategory, 
+                       'Производитель' as manufacturer, 'Состав' as composition, 
+                       price as base_price, price as minimum_price, 10 as quantity, NULL as image_name
+                FROM products LIMIT 20;
+            """)
+            
         columns = [desc[0] for desc in cursor.description]
         products = [dict(zip(columns, row)) for row in cursor.fetchall()]
         conn.close()
