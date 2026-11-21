@@ -139,17 +139,21 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(self.catalog_page)
         layout.setAlignment(Qt.AlignTop)
         
-        # Поле поиска
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Поиск...")
         self.search_input.textChanged.connect(self.load_catalog)
         layout.addWidget(self.search_input)
         
-        # --- ЗАДАНИЕ 1: Выпадающий список категорий ---
         self.category_combo = QComboBox()
         self.category_combo.addItems(fetch_categories())
         self.category_combo.currentIndexChanged.connect(self.load_catalog)
         layout.addWidget(self.category_combo)
+        
+        # --- ЗАДАНИЕ 1: Сортировка ---
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItems(["По возрастанию", "По убыванию"])
+        self.sort_combo.currentIndexChanged.connect(self.load_catalog)
+        layout.addWidget(self.sort_combo)
         
         self.catalog_layout = QVBoxLayout()
         self.catalog_layout.setAlignment(Qt.AlignTop)
@@ -199,8 +203,10 @@ class MainWindow(QMainWindow):
         search = self.search_input.text().strip()
         category = self.category_combo.currentText()
         
-        # --- ЗАДАНИЕ 2: Фильтрация ---
-        products = fetch_catalog(search_query=search, category=category)
+        # Определяем направление сортировки
+        sort_order = "ASC" if self.sort_combo.currentText() == "По возрастанию" else "DESC"
+        
+        products = fetch_catalog(search_query=search, category=category, sort_order=sort_order)
         
         for product in products:
             self.catalog_layout.addWidget(ProductCard(product))

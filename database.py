@@ -6,7 +6,7 @@ PROJECT_DIR = Path(__file__).parent
 def initialise_database():
     pass
 
-def fetch_catalog(search_query="", category=""):
+def fetch_catalog(search_query="", category="", sort_order="ASC"):
     try:
         conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
         cursor = conn.cursor()
@@ -23,6 +23,12 @@ def fetch_catalog(search_query="", category=""):
         if category and category != "Все категории":
             query += " AND 'Категория 1' = %s" 
             params.append(category)
+            
+        # --- ЗАДАНИЕ 2: Сортировка ---
+        if sort_order == "ASC":
+            query += " ORDER BY price ASC"
+        else:
+            query += " ORDER BY price DESC"
             
         query += " LIMIT 20;"
         
