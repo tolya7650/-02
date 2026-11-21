@@ -8,10 +8,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit
+    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit, QComboBox
 )
 
-from database import PROJECT_DIR, fetch_catalog, authenticate
+from database import PROJECT_DIR, fetch_catalog, authenticate, fetch_categories
 
 RESOURCES = PROJECT_DIR / "resources"
 IMAGES = RESOURCES / "images"
@@ -139,11 +139,17 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(self.catalog_page)
         layout.setAlignment(Qt.AlignTop)
         
-        # --- ЗАДАНИЕ 1: Поле поиска ---
+        # Поле поиска
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Поиск...")
-        self.search_input.textChanged.connect(self.load_catalog) # Подключаем к методу загрузки
+        self.search_input.textChanged.connect(self.load_catalog)
         layout.addWidget(self.search_input)
+        
+        # --- ЗАДАНИЕ 1: Выпадающий список категорий ---
+        self.category_combo = QComboBox()
+        self.category_combo.addItems(fetch_categories())
+        self.category_combo.currentIndexChanged.connect(self.load_catalog)
+        layout.addWidget(self.category_combo)
         
         self.catalog_layout = QVBoxLayout()
         self.catalog_layout.setAlignment(Qt.AlignTop)
@@ -185,15 +191,16 @@ class MainWindow(QMainWindow):
         self.load_catalog()
 
     def load_catalog(self) -> None:
-        # Очищаем старые карточки
         while self.catalog_layout.count():
             item = self.catalog_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
-        # --- ЗАДАНИЕ 2: Поиск ---
         search = self.search_input.text().strip()
-        products = fetch_catalog(search_query=search) # Передаем запрос в базу
+        category = self.category_combo.currentText()
+        
+        # --- ЗАДАНИЕ 2: Фильтрация ---
+        products = fetch_catalog(search_query=search, category=category)
         
         for product in products:
             self.catalog_layout.addWidget(ProductCard(product))

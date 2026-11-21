@@ -6,30 +6,27 @@ PROJECT_DIR = Path(__file__).parent
 def initialise_database():
     pass
 
-def fetch_catalog(search_query=""):
+def fetch_catalog(search_query="", category=""):
     try:
         conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
         cursor = conn.cursor()
         
-        if search_query:
-            # Если есть поисковый запрос, ищем по названию и описанию (ILIKE)
-            cursor.execute("""
-                SELECT product_id, name, 'Категория' as category, 'Подкатегория' as subcategory, 
-                       'Производитель' as manufacturer, 'Состав' as composition, 
-                       price as base_price, price as minimum_price, 10 as quantity, NULL as image_name
-                FROM products 
-                WHERE name ILIKE %s OR 'Состав' ILIKE %s
-                LIMIT 20;
-            """, (f"%{search_query}%", f"%{search_query}%"))
-        else:
-            # Если пусто, показываем все товары
-            cursor.execute("""
-                SELECT product_id, name, 'Категория' as category, 'Подкатегория' as subcategory, 
-                       'Производитель' as manufacturer, 'Состав' as composition, 
-                       price as base_price, price as minimum_price, 10 as quantity, NULL as image_name
-                FROM products LIMIT 20;
-            """)
+        query = """
+            SELECT product_id, name, 'Категория 1' as category, 'Подкатегория' as subcategory, 
+                   'Производитель' as manufacturer, 'Состав' as composition, 
+                   price as base_price, price as minimum_price, 10 as quantity, NULL as image_name
+            FROM products 
+            WHERE name ILIKE %s
+        """
+        params = [f"%{search_query}%"]
+        
+        if category and category != "Все категории":
+            query += " AND 'Категория 1' = %s" 
+            params.append(category)
             
+        query += " LIMIT 20;"
+        
+        cursor.execute(query, tuple(params))
         columns = [desc[0] for desc in cursor.description]
         products = [dict(zip(columns, row)) for row in cursor.fetchall()]
         conn.close()
@@ -37,6 +34,9 @@ def fetch_catalog(search_query=""):
     except Exception as e:
         print(f"Ошибка БД: {e}")
         return []
+
+def fetch_categories():
+    return ["Все категории", "Категория 1", "Категория 2", "Категория 3"]
 
 def authenticate(login):
     try:
