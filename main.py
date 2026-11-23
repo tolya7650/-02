@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit, QComboBox, QDialog
+    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit, QComboBox, QDialog, QSpinBox
 )
 
 from database import PROJECT_DIR, fetch_catalog, fetch_product_by_id, authenticate, fetch_categories
@@ -32,6 +32,7 @@ class ProductCardDialog(QDialog):
         layout = QVBoxLayout(self)
         
         if self.product:
+            # --- ЗАДАНИЕ 1: Загрузка данных из БД ---
             name = QLabel(self.product["name"])
             name.setStyleSheet("font-weight: bold; font-size: 18px;")
             layout.addWidget(name)
@@ -43,19 +44,32 @@ class ProductCardDialog(QDialog):
             desc = QLabel(self.product["description"])
             desc.setWordWrap(True)
             layout.addWidget(desc)
+            
+            stock_qty = self.product["quantity"]
+            
+            # --- ЗАДАНИЕ 2: Размер ---
+            layout.addWidget(QLabel("Размер:"))
+            self.size_combo = QComboBox()
+            self.size_combo.addItems(["S", "M", "L", "XL"])
+            layout.addWidget(self.size_combo)
+            
+            # --- ЗАДАНИЕ 3: Количество ---
+            layout.addWidget(QLabel("Количество:"))
+            self.quantity_spin = QSpinBox()
+            self.quantity_spin.setMinimum(1)
+            self.quantity_spin.setMaximum(stock_qty) # Ограничение по остатку
+            layout.addWidget(self.quantity_spin)
+            
+            add_button = QPushButton("Добавить в корзину")
+            add_button.clicked.connect(self.on_add_clicked)
+            
+            if stock_qty == 0:
+                add_button.setEnabled(False)
+                add_button.setText("Нет в наличии")
+                
+            layout.addWidget(add_button)
         else:
             layout.addWidget(QLabel("Товар не найден"))
-
-        self.variant_combo = QComboBox()
-        self.variant_combo.addItem("Красный")
-        self.variant_combo.addItem("Синий")
-        self.variant_combo.addItem("Зелёный")
-        layout.addWidget(QLabel("Вариант:"))
-        layout.addWidget(self.variant_combo)
-
-        add_button = QPushButton("Добавить в корзину")
-        add_button.clicked.connect(self.on_add_clicked)
-        layout.addWidget(add_button)
 
     def on_add_clicked(self):
         QMessageBox.information(self, "Этап разработки", "Корзина будет подключена в РТ 19")
@@ -65,6 +79,7 @@ class ProductCard(QFrame):
     def __init__(self, product, parent_window) -> None:
         super().__init__()
         self.parent_window = parent_window
+        self.product_id = product["product_id"]
         self.setObjectName("productCard")
         self.setFrameShape(QFrame.StyledPanel)
         
@@ -98,11 +113,10 @@ class ProductCard(QFrame):
         price.setObjectName("price")
         layout.addWidget(price, alignment=Qt.AlignRight | Qt.AlignVCenter)
 
-        # Делаем всю карточку кликабельной
         self.mousePressEvent = lambda event: self.open_card()
 
     def open_card(self):
-        dialog = ProductCardDialog(self.parent_window.current_product_id, self.parent_window)
+        dialog = ProductCardDialog(self.product_id, self.parent_window)
         dialog.exec()
 
 
@@ -112,7 +126,6 @@ class MainWindow(QMainWindow):
         self.user_id = user_id
         self.role_id = role_id
         self.full_name = full_name
-        self.current_product_id = None
         
         self.setWindowTitle("Мир велосипедов")
         if ICON.exists():
@@ -258,7 +271,6 @@ class MainWindow(QMainWindow):
         products = fetch_catalog(search_query=search, category=category, sort_order=sort_order)
         
         for product in products:
-            self.current_product_id = product["product_id"]
             card = ProductCard(product, self)
             self.catalog_layout.addWidget(card)
 
@@ -273,7 +285,7 @@ def main() -> int:
         #title, #productName { font-weight: bold; font-size: 18px; }
         #productCard { border: 1px solid #70B2AF; border-radius: 6px; margin: 4px; padding: 4px; }
         #price { font-weight: bold; font-size: 16px; }
-        QLineEdit, QComboBox { padding: 6px; border: 1px solid #70B2AF; border-radius: 3px; }
+        QLineEdit, QComboBox, QSpinBox { padding: 6px; border: 1px solid #70B2AF; border-radius: 3px; }
         """
     )
     
