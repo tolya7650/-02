@@ -24,7 +24,6 @@ def fetch_catalog(search_query="", category="", sort_order="ASC"):
             query += " AND 'Категория 1' = %s" 
             params.append(category)
             
-        # --- ЗАДАНИЕ 2: Сортировка ---
         if sort_order == "ASC":
             query += " ORDER BY price ASC"
         else:
@@ -40,6 +39,20 @@ def fetch_catalog(search_query="", category="", sort_order="ASC"):
     except Exception as e:
         print(f"Ошибка БД: {e}")
         return []
+
+def fetch_product_by_id(product_id):
+    try:
+        conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
+        cursor = conn.cursor()
+        cursor.execute("SELECT product_id, name, price, 'Описание товара' as description, NULL as image_name FROM products WHERE product_id = %s", (product_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return {'product_id': row[0], 'name': row[1], 'price': row[2], 'description': row[3], 'image_name': row[4]}
+        return None
+    except Exception as e:
+        print(f"Ошибка БД: {e}")
+        return None
 
 def fetch_categories():
     return ["Все категории", "Категория 1", "Категория 2", "Категория 3"]
