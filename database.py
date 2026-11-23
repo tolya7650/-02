@@ -44,8 +44,14 @@ def fetch_product_by_id(product_id):
     try:
         conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
         cursor = conn.cursor()
-        # Берем данные из таблицы products
-        cursor.execute("SELECT product_id, name, price, 'Описание товара' as description, NULL as image_name, 10 as quantity FROM products WHERE product_id = %s", (product_id,))
+        # Если колонки image_path нет, мы её создадим (на всякий случай)
+        cursor.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_path VARCHAR(255);")
+        conn.commit()
+        
+        cursor.execute("""
+            SELECT product_id, name, price, 'Описание товара' as description, image_path, 10 as quantity 
+            FROM products WHERE product_id = %s
+        """, (product_id,))
         row = cursor.fetchone()
         conn.close()
         if row:
@@ -54,6 +60,18 @@ def fetch_product_by_id(product_id):
     except Exception as e:
         print(f"Ошибка БД: {e}")
         return None
+
+def update_product_image(product_id, image_path):
+    try:
+        conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
+        cursor = conn.cursor()
+        cursor.execute("UPDATE products SET image_path = %s WHERE product_id = %s", (image_path, product_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Ошибка обновления БД: {e}")
+        return False
 
 def fetch_categories():
     return ["Все категории", "Категория 1", "Категория 2", "Категория 3"]

@@ -3,18 +3,20 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import shutil
+import uuid
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit, QComboBox, QDialog, QSpinBox
+    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit, QComboBox, QDialog, QSpinBox, QFileDialog
 )
 
-from database import PROJECT_DIR, fetch_catalog, fetch_product_by_id, authenticate, fetch_categories
+from database import PROJECT_DIR, fetch_catalog, fetch_product_by_id, authenticate, fetch_categories, update_product_image
 
 RESOURCES = PROJECT_DIR / "resources"
-IMAGES = RESOURCES / "images"
+IMAGES = PROJECT_DIR / "images"
 PLACEHOLDER = RESOURCES / "picture.png"
 LOGO = RESOURCES / "Мир велосипедов.png"
 ICON = RESOURCES / "Мир велосипедов.ico"
@@ -32,7 +34,6 @@ class ProductCardDialog(QDialog):
         layout = QVBoxLayout(self)
         
         if self.product:
-            # --- ЗАДАНИЕ 1: Загрузка данных из БД ---
             name = QLabel(self.product["name"])
             name.setStyleSheet("font-weight: bold; font-size: 18px;")
             layout.addWidget(name)
@@ -47,17 +48,25 @@ class ProductCardDialog(QDialog):
             
             stock_qty = self.product["quantity"]
             
-            # --- ЗАДАНИЕ 2: Размер ---
+            self.image_label = QLabel()
+            self.image_label.setFixedSize(200, 150)
+            self.image_label.setAlignment(Qt.AlignCenter)
+            self.update_image_display(self.product["image_name"])
+            layout.addWidget(self.image_label)
+            
+            upload_button = QPushButton("Загрузить изображение")
+            upload_button.clicked.connect(self.load_image)
+            layout.addWidget(upload_button)
+            
             layout.addWidget(QLabel("Размер:"))
             self.size_combo = QComboBox()
             self.size_combo.addItems(["S", "M", "L", "XL"])
             layout.addWidget(self.size_combo)
             
-            # --- ЗАДАНИЕ 3: Количество ---
             layout.addWidget(QLabel("Количество:"))
             self.quantity_spin = QSpinBox()
             self.quantity_spin.setMinimum(1)
-            self.quantity_spin.setMaximum(stock_qty) # Ограничение по остатку
+            self.quantity_spin.setMaximum(stock_qty)
             layout.addWidget(self.quantity_spin)
             
             add_button = QPushButton("Добавить в корзину")
@@ -70,6 +79,43 @@ class ProductCardDialog(QDialog):
             layout.addWidget(add_button)
         else:
             layout.addWidget(QLabel("Товар не найден"))
+
+    def update_image_display(self, image_path):
+        pixmap = QPixmap(str(image_path)) if image_path else QPixmap()
+        if pixmap.isNull():
+            pixmap = QPixmap(str(PLACEHOLDER))
+        if pixmap.isNull():
+            self.image_label.setText("Нет фото")
+        else:
+            self.image_label.setPixmap(pixmap.scaled(200, 150, Qt.KeepAspectRatio))
+
+    def load_image(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите изображение", "", "Images (*.png *.jpg *.jpeg)"
+        )
+        if not file_path:
+            return
+            
+        if QPixmap(file_path).isNull():
+            QMessageBox.warning(self, "Ошибка", "Файл не является изображением")
+            return
+            
+        # Создаем папку images, если ее нет
+        IMAGES.mkdir(exist_ok=True)
+        target = IMAGES / (uuid.uuid4().hex + Path(file_path).suffix)
+        
+        try:
+            shutil.copy2(file_path, target)
+            
+            if update_product_image(self.product_id, str(target)):
+                self.update_image_display(str(target))
+                self.product["image_name"] = str(target)
+            else:
+                raise Exception("Ошибка БД")
+        except Exception as e:
+            if target.exists():
+                target.unlink()
+            QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить изображение: {e}")
 
     def on_add_clicked(self):
         QMessageBox.information(self, "Этап разработки", "Корзина будет подключена в РТ 19")
@@ -133,7 +179,6 @@ class MainWindow(QMainWindow):
         self.resize(980, 720)
         
         self.stacked_widget = QStackedWidget()
-        
         self.catalog_page = QWidget()
         self.product_page = QWidget()
         self.orders_page = QWidget()
@@ -277,6 +322,7 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
+    app.setApplicationName("PP02")
     app.setStyleSheet(
         """
         QWidget { font-family: Calibri; font-size: 14px; color: #000000; background: #FFFFFF; }
