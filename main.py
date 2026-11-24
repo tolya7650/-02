@@ -10,7 +10,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit, QComboBox, QDialog, QSpinBox, QFileDialog
+    QLabel, QScrollArea, QFrame, QMessageBox, QLineEdit, QComboBox, QDialog, QSpinBox, QFileDialog,
+    QTableWidget, QTableWidgetItem
 )
 
 from database import PROJECT_DIR, fetch_catalog, fetch_product_by_id, authenticate, fetch_categories, update_product_image
@@ -23,9 +24,10 @@ ICON = RESOURCES / "Мир велосипедов.ico"
 
 
 class ProductCardDialog(QDialog):
-    def __init__(self, product_id, parent=None):
+    def __init__(self, product_id, main_window, parent=None):
         super().__init__(parent)
         self.product_id = product_id
+        self.main_window = main_window # Сохраняем ссылку на главное окно
         self.setWindowTitle("Карточка товара")
         self.setMinimumWidth(400)
         
@@ -69,13 +71,9 @@ class ProductCardDialog(QDialog):
             self.quantity_spin.setMaximum(stock_qty)
             layout.addWidget(self.quantity_spin)
             
+            # --- ЗАДАНИЕ 2: Кнопка добавления в корзину ---
             add_button = QPushButton("Добавить в корзину")
-            add_button.clicked.connect(self.on_add_clicked)
-            
-            if stock_qty == 0:
-                add_button.setEnabled(False)
-                add_button.setText("Нет в наличии")
-                
+            add_button.clicked.connect(self.add_to_cart) # Подключаем к нашему методу
             layout.addWidget(add_button)
         else:
             layout.addWidget(QLabel("Товар не найден"))
@@ -95,18 +93,13 @@ class ProductCardDialog(QDialog):
         )
         if not file_path:
             return
-            
         if QPixmap(file_path).isNull():
             QMessageBox.warning(self, "Ошибка", "Файл не является изображением")
             return
-            
-        # Создаем папку images, если ее нет
         IMAGES.mkdir(exist_ok=True)
         target = IMAGES / (uuid.uuid4().hex + Path(file_path).suffix)
-        
         try:
             shutil.copy2(file_path, target)
-            
             if update_product_image(self.product_id, str(target)):
                 self.update_image_display(str(target))
                 self.product["image_name"] = str(target)
@@ -117,8 +110,12 @@ class ProductCardDialog(QDialog):
                 target.unlink()
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить изображение: {e}")
 
-    def on_add_clicked(self):
-        QMessageBox.information(self, "Этап разработки", "Корзина будет подключена в РТ 19")
+    def add_to_cart(self):
+        name = self.product["name"]
+        quantity = self.quantity_spin.value()
+        price = float(self.product["price"])
+        self.main_window.add_to_cart(name, quantity, price, self.product_id)
+        self.accept() # Закрываем карточку
 
 
 class ProductCard(QFrame):
@@ -162,7 +159,7 @@ class ProductCard(QFrame):
         self.mousePressEvent = lambda event: self.open_card()
 
     def open_card(self):
-        dialog = ProductCardDialog(self.product_id, self.parent_window)
+        dialog = ProductCardDialog(self.product_id, self.parent_window, self.parent_window)
         dialog.exec()
 
 
@@ -180,16 +177,16 @@ class MainWindow(QMainWindow):
         
         self.stacked_widget = QStackedWidget()
         self.catalog_page = QWidget()
-        self.product_page = QWidget()
+        self.cart_page = QWidget()
         self.orders_page = QWidget()
         
         self.setup_catalog_page()
-        self.setup_product_page()
+        self.setup_cart_page()
         self.setup_orders_page()
         
-        self.stacked_widget.addWidget(self.catalog_page)
-        self.stacked_widget.addWidget(self.product_page)
-        self.stacked_widget.addWidget(self.orders_page)
+        self.stacked_widget.addWidget(self.catalog_page) # 0
+        self.stacked_widget.addWidget(self.cart_page)    # 1
+        self.stacked_widget.addWidget(self.orders_page)  # 2
         
         self.back_button = QPushButton("Назад")
         self.back_button.clicked.connect(self.go_back)
@@ -206,9 +203,9 @@ class MainWindow(QMainWindow):
         
         header.addStretch()
         
-        self.btn_product = QPushButton("Карточка товара")
-        self.btn_product.clicked.connect(lambda: self.switch_page(1))
-        header.addWidget(self.btn_product)
+        self.btn_cart = QPushButton("Корзина")
+        self.btn_cart.clicked.connect(lambda: self.switch_page(1))
+        header.addWidget(self.btn_cart)
         
         self.btn_orders = QPushButton("Заказы")
         self.btn_orders.clicked.connect(lambda: self.switch_page(2))
@@ -274,9 +271,22 @@ class MainWindow(QMainWindow):
         scroll.setWidget(container)
         layout.addWidget(scroll)
 
-    def setup_product_page(self):
-        layout = QVBoxLayout(self.product_page)
-        layout.addWidget(QLabel("Страница: Карточка товара"))
+    def setup_cart_page(self):
+        layout = QVBoxLayout(self.cart_page)
+        
+        self.cart_table = QTableWidget()
+        self.cart_table.setColumnCount(5)
+        self.cart_table.setHorizontalHeaderLabels(["Наименование", "Количество", "Цена", "Сумма", "ID"])
+        self.cart_table.setColumnHidden(4, True)
+        layout.addWidget(self.cart_table)
+        
+        self.total_label = QLabel("Итого: 0 ₽")
+        self.total_label.setStyleSheet("font-weight: bold; font-size: 16px;")
+        layout.addWidget(self.total_label)
+        
+        remove_button = QPushButton("Удалить выбранное")
+        remove_button.clicked.connect(self.remove_from_cart)
+        layout.addWidget(remove_button)
 
     def setup_orders_page(self):
         layout = QVBoxLayout(self.orders_page)
@@ -284,7 +294,7 @@ class MainWindow(QMainWindow):
 
     def switch_page(self, index):
         self.stacked_widget.setCurrentIndex(index)
-        titles = ["Мир велосипедов — Каталог", "Мир велосипедов — Карточка товара", "Мир велосипедов — Заказы"]
+        titles = ["Мир велосипедов — Каталог", "Мир велосипедов — Корзина", "Мир велосипедов — Заказы"]
         self.setWindowTitle(titles[index])
         
         if index == 0:
@@ -318,6 +328,33 @@ class MainWindow(QMainWindow):
         for product in products:
             card = ProductCard(product, self)
             self.catalog_layout.addWidget(card)
+
+    # --- ЗАДАНИЕ 2: Добавление в корзину ---
+    def add_to_cart(self, name, quantity, price, product_id):
+        row = self.cart_table.rowCount()
+        self.cart_table.insertRow(row)
+        self.cart_table.setItem(row, 0, QTableWidgetItem(name))
+        self.cart_table.setItem(row, 1, QTableWidgetItem(str(quantity)))
+        self.cart_table.setItem(row, 2, QTableWidgetItem(str(price)))
+        self.cart_table.setItem(row, 3, QTableWidgetItem(str(quantity * price)))
+        self.cart_table.setItem(row, 4, QTableWidgetItem(str(product_id)))
+        self.update_total()
+
+    # --- ЗАДАНИЕ 3: Удаление из корзины ---
+    def remove_from_cart(self):
+        row = self.cart_table.currentRow()
+        if row >= 0:
+            self.cart_table.removeRow(row)
+            self.update_total()
+
+    # --- ЗАДАНИЕ 4: Подсчёт суммы ---
+    def update_total(self):
+        total = 0
+        for row in range(self.cart_table.rowCount()):
+            total += float(self.cart_table.item(row, 3).text())
+        self.total_label.setText(f"Итого: {total} ₽")
+        if self.cart_table.rowCount() == 0:
+            self.total_label.setText("Итого: 0 ₽")
 
 
 def main() -> int:

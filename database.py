@@ -44,10 +44,8 @@ def fetch_product_by_id(product_id):
     try:
         conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
         cursor = conn.cursor()
-        # Если колонки image_path нет, мы её создадим (на всякий случай)
         cursor.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_path VARCHAR(255);")
         conn.commit()
-        
         cursor.execute("""
             SELECT product_id, name, price, 'Описание товара' as description, image_path, 10 as quantity 
             FROM products WHERE product_id = %s
