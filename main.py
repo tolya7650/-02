@@ -27,7 +27,7 @@ class ProductCardDialog(QDialog):
     def __init__(self, product_id, main_window, parent=None):
         super().__init__(parent)
         self.product_id = product_id
-        self.main_window = main_window # Сохраняем ссылку на главное окно
+        self.main_window = main_window
         self.setWindowTitle("Карточка товара")
         self.setMinimumWidth(400)
         
@@ -71,9 +71,8 @@ class ProductCardDialog(QDialog):
             self.quantity_spin.setMaximum(stock_qty)
             layout.addWidget(self.quantity_spin)
             
-            # --- ЗАДАНИЕ 2: Кнопка добавления в корзину ---
             add_button = QPushButton("Добавить в корзину")
-            add_button.clicked.connect(self.add_to_cart) # Подключаем к нашему методу
+            add_button.clicked.connect(self.add_to_cart)
             layout.addWidget(add_button)
         else:
             layout.addWidget(QLabel("Товар не найден"))
@@ -115,7 +114,7 @@ class ProductCardDialog(QDialog):
         quantity = self.quantity_spin.value()
         price = float(self.product["price"])
         self.main_window.add_to_cart(name, quantity, price, self.product_id)
-        self.accept() # Закрываем карточку
+        self.accept()
 
 
 class ProductCard(QFrame):
@@ -184,9 +183,9 @@ class MainWindow(QMainWindow):
         self.setup_cart_page()
         self.setup_orders_page()
         
-        self.stacked_widget.addWidget(self.catalog_page) # 0
-        self.stacked_widget.addWidget(self.cart_page)    # 1
-        self.stacked_widget.addWidget(self.orders_page)  # 2
+        self.stacked_widget.addWidget(self.catalog_page)
+        self.stacked_widget.addWidget(self.cart_page)
+        self.stacked_widget.addWidget(self.orders_page)
         
         self.back_button = QPushButton("Назад")
         self.back_button.clicked.connect(self.go_back)
@@ -284,6 +283,19 @@ class MainWindow(QMainWindow):
         self.total_label.setStyleSheet("font-weight: bold; font-size: 16px;")
         layout.addWidget(self.total_label)
         
+        # --- ЗАДАНИЕ 2: QSpinBox для изменения количества ---
+        change_layout = QHBoxLayout()
+        change_layout.addWidget(QLabel("Новое количество:"))
+        self.change_quantity_spin = QSpinBox()
+        self.change_quantity_spin.setMinimum(1)
+        change_layout.addWidget(self.change_quantity_spin)
+        
+        change_btn = QPushButton("Изменить")
+        change_btn.clicked.connect(self.change_quantity)
+        change_layout.addWidget(change_btn)
+        
+        layout.addLayout(change_layout)
+        
         remove_button = QPushButton("Удалить выбранное")
         remove_button.clicked.connect(self.remove_from_cart)
         layout.addWidget(remove_button)
@@ -329,7 +341,6 @@ class MainWindow(QMainWindow):
             card = ProductCard(product, self)
             self.catalog_layout.addWidget(card)
 
-    # --- ЗАДАНИЕ 2: Добавление в корзину ---
     def add_to_cart(self, name, quantity, price, product_id):
         row = self.cart_table.rowCount()
         self.cart_table.insertRow(row)
@@ -340,14 +351,22 @@ class MainWindow(QMainWindow):
         self.cart_table.setItem(row, 4, QTableWidgetItem(str(product_id)))
         self.update_total()
 
-    # --- ЗАДАНИЕ 3: Удаление из корзины ---
+    # --- ЗАДАНИЕ 2: Изменение количества ---
+    def change_quantity(self):
+        row = self.cart_table.currentRow()
+        if row >= 0:
+            new_quantity = self.change_quantity_spin.value()
+            price = float(self.cart_table.item(row, 2).text())
+            self.cart_table.setItem(row, 1, QTableWidgetItem(str(new_quantity)))
+            self.cart_table.setItem(row, 3, QTableWidgetItem(str(new_quantity * price)))
+            self.update_total()
+
     def remove_from_cart(self):
         row = self.cart_table.currentRow()
         if row >= 0:
             self.cart_table.removeRow(row)
             self.update_total()
 
-    # --- ЗАДАНИЕ 4: Подсчёт суммы ---
     def update_total(self):
         total = 0
         for row in range(self.cart_table.rowCount()):
