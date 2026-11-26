@@ -302,7 +302,6 @@ class MainWindow(QMainWindow):
         remove_button.clicked.connect(self.remove_from_cart)
         layout.addWidget(remove_button)
         
-        # --- НОВОЕ ДЛЯ ПАРЫ 21 ---
         confirm_button = QPushButton("Оформить заказ")
         confirm_button.setStyleSheet("background-color: #2E8B57; color: white; font-weight: bold; padding: 10px;")
         confirm_button.clicked.connect(self.confirm_order)
@@ -382,13 +381,11 @@ class MainWindow(QMainWindow):
         if self.cart_table.rowCount() == 0:
             self.total_label.setText("Итого: 0 ₽")
 
-    # --- ЗАДАНИЕ 1 и 2: Сохранение заказа ---
     def confirm_order(self):
         if self.cart_table.rowCount() == 0:
             QMessageBox.warning(self, "Ошибка", "Корзина пуста")
             return
             
-        # Собираем товары из таблицы
         cart_items = []
         for row in range(self.cart_table.rowCount()):
             product_id = int(self.cart_table.item(row, 4).text())
@@ -396,13 +393,13 @@ class MainWindow(QMainWindow):
             price = float(self.cart_table.item(row, 2).text())
             cart_items.append({'product_id': product_id, 'quantity': quantity, 'price': price})
             
-        # Сохраняем в БД (функция из database.py)
-        if save_order(self.user_id, cart_items):
-            QMessageBox.information(self, "Успех", "Заказ оформлен")
+        success, message = save_order(self.user_id, cart_items)
+        if success:
+            QMessageBox.information(self, "Успех", message)
             self.cart_table.setRowCount(0)
             self.update_total()
         else:
-            QMessageBox.critical(self, "Ошибка", "Не удалось сохранить заказ")
+            QMessageBox.critical(self, "Ошибка", message)
 
 
 def main() -> int:

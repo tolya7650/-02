@@ -88,7 +88,7 @@ def authenticate(login):
         print(f"Ошибка БД: {e}")
         return None
 
-# --- НОВОЕ ДЛЯ ПАРЫ 21 ---
+# --- ОБНОВЛЕНО ДЛЯ ПАРЫ 22 ---
 def save_order(user_id, cart_items):
     try:
         conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
@@ -98,29 +98,48 @@ def save_order(user_id, cart_items):
         cursor.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Новый';")
         conn.commit()
         
-        # 2. Вставляем сам заказ
+        # 2. Проверяем остатки на складе
+        for item in cart_items:
+            product_id = item['product_id']
+            quantity = item['quantity']
+            cursor.execute("SELECT COALESCE(SUM(quantity), 0) FROM stock_items WHERE product_id = %s", (product_id,))
+            stock = cursor.fetchone()[0]
+            if stock < quantity:
+                conn.rollback()
+                return False, f"Недостаточно товара (ID {product_id}) на складе"
+        
+        # 3. Вставляем сам заказ
         cursor.execute(
             "INSERT INTO orders (order_date, user_id, status) VALUES (CURRENT_DATE, %s, 'Новый') RETURNING order_id",
             (user_id,)
         )
         order_id = cursor.fetchone()[0]
         
-        # 3. Вставляем состав заказа
+        # 4. Вставляем состав заказа и обновляем остатки
         for item in cart_items:
             product_id = item['product_id']
             quantity = item['quantity']
             price = item['price']
+            
             cursor.execute(
                 "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)",
                 (order_id, product_id, quantity, price)
             )
+            # Уменьшаем остаток
+            cursor.execute(
+                "UPDATE stock_items SET quantity = quantity - %s WHERE product_id = %s",
+                (quantity, product_id)
+            )
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return False, f"Нет остатков для товара (ID {product_id})"
             
-        # 4. Подтверждаем
+        # 5. Подтверждаем
         conn.commit()
         conn.close()
-        return True
+        return True, "Заказ оформлен"
     except Exception as e:
         print(f"Ошибка сохранения заказа: {e}")
         if 'conn' in locals():
             conn.rollback()
-        return False
+        return False, str(e)
