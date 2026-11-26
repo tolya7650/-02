@@ -137,7 +137,6 @@ def save_order(user_id, cart_items):
             conn.rollback()
         return False, str(e)
 
-# --- НОВОЕ ДЛЯ ПАРЫ 23 ---
 def delete_product(product_id):
     try:
         conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")

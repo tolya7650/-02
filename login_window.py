@@ -1,7 +1,6 @@
-from PySide6.QtWidgets import QDialog, QLineEdit, QPushButton, QVBoxLayout, QLabel, QMessageBox
+from PySide6.QtWidgets import QDialog, QLineEdit, QPushButton, QVBoxLayout, QLabel, QMessageBox, QHBoxLayout
 import psycopg
 
-# --- Функция валидации (Задание 1) ---
 def validate_login(raw):
     login = raw.strip()
     if not login:
@@ -15,6 +14,7 @@ class LoginWindow(QDialog):
         super().__init__()
         self.setWindowTitle("Авторизация")
         self.main_window = None
+        self.user_data = None # Будет хранить данные пользователя
         self.setup_ui()
 
     def setup_ui(self):
@@ -25,14 +25,19 @@ class LoginWindow(QDialog):
         self.login_input.setPlaceholderText("Введите логин")
         layout.addWidget(self.login_input)
         
+        # Кнопка Войти
         self.login_button = QPushButton("Войти")
         self.login_button.clicked.connect(self.check_login)
         layout.addWidget(self.login_button)
         
+        # Кнопка Гость (для теста)
+        self.guest_button = QPushButton("Продолжить как гость")
+        self.guest_button.clicked.connect(self.accept) # Просто закрывает окно
+        layout.addWidget(self.guest_button)
+        
         self.setLayout(layout)
 
     def check_login(self):
-        # --- ЗАДАНИЕ 1: Используем validate_login ---
         login, error = validate_login(self.login_input.text())
         if error:
             QMessageBox.critical(self, "Ошибка", error)
@@ -52,13 +57,14 @@ class LoginWindow(QDialog):
                     parts.append(middle_name)
                 full_name = " ".join(parts)
                 
-                # Information при успешном входе (из прошлой пары)
-                QMessageBox.information(self, "Информация", f"Добро пожаловать, {full_name}!")
+                self.user_data = {
+                    'user_id': user_id,
+                    'role_id': role_id,
+                    'full_name': full_name
+                }
                 
+                QMessageBox.information(self, "Информация", f"Добро пожаловать, {full_name}!")
                 self.accept()
-                from main import MainWindow
-                self.main_window = MainWindow(user_id=user_id, role_id=role_id, full_name=full_name)
-                self.main_window.show()
             else:
                 QMessageBox.critical(self, "Ошибка", "Пользователь не найден")
                 

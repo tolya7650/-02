@@ -78,7 +78,6 @@ class ProductCardDialog(QDialog):
             add_button.clicked.connect(self.add_to_cart)
             layout.addWidget(add_button)
             
-            # --- НОВОЕ ДЛЯ ПАРЫ 23 ---
             delete_button = QPushButton("Удалить товар")
             delete_button.setStyleSheet("background-color: #d9534f; color: white;")
             delete_button.clicked.connect(self.delete_product)
@@ -125,7 +124,6 @@ class ProductCardDialog(QDialog):
         self.main_window.add_to_cart(name, quantity, price, self.product_id)
         self.accept()
 
-    # --- НОВОЕ ДЛЯ ПАРЫ 23 ---
     def delete_product(self):
         reply = QMessageBox.question(
             self, "Удаление", "Вы уверены, что хотите удалить товар?",
@@ -243,6 +241,10 @@ class MainWindow(QMainWindow):
         else:
             self.name_label = QLabel("Гость")
             header.addWidget(self.name_label)
+            
+            # Если гость — скрываем кнопки корзины и заказов
+            self.btn_cart.setVisible(False)
+            self.btn_orders.setVisible(False)
         
         layout = QVBoxLayout()
         layout.addLayout(header)
@@ -443,7 +445,20 @@ def main() -> int:
     from login_window import LoginWindow
     login_win = LoginWindow()
     
+    # Показываем окно входа. Если пользователь зашел или нажал "Гость"
     if login_win.exec():
+        user_data = getattr(login_win, 'user_data', None)
+        
+        if user_data:
+            window = MainWindow(
+                user_id=user_data['user_id'], 
+                role_id=user_data['role_id'], 
+                full_name=user_data['full_name']
+            )
+        else:
+            window = MainWindow() # Гость
+            
+        window.show()
         return app.exec()
     return 0
 
