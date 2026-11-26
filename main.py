@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from database import (
     PROJECT_DIR, fetch_catalog, fetch_product_by_id, authenticate, fetch_categories, 
-    update_product_image, save_order
+    update_product_image, save_order, delete_product
 )
 
 RESOURCES = PROJECT_DIR / "resources"
@@ -77,6 +77,12 @@ class ProductCardDialog(QDialog):
             add_button = QPushButton("Добавить в корзину")
             add_button.clicked.connect(self.add_to_cart)
             layout.addWidget(add_button)
+            
+            # --- НОВОЕ ДЛЯ ПАРЫ 23 ---
+            delete_button = QPushButton("Удалить товар")
+            delete_button.setStyleSheet("background-color: #d9534f; color: white;")
+            delete_button.clicked.connect(self.delete_product)
+            layout.addWidget(delete_button)
         else:
             layout.addWidget(QLabel("Товар не найден"))
 
@@ -118,6 +124,23 @@ class ProductCardDialog(QDialog):
         price = float(self.product["price"])
         self.main_window.add_to_cart(name, quantity, price, self.product_id)
         self.accept()
+
+    # --- НОВОЕ ДЛЯ ПАРЫ 23 ---
+    def delete_product(self):
+        reply = QMessageBox.question(
+            self, "Удаление", "Вы уверены, что хотите удалить товар?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+            
+        success, message = delete_product(self.product_id)
+        if success:
+            QMessageBox.information(self, "Успех", message)
+            self.main_window.load_catalog()
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Ошибка", message)
 
 
 class ProductCard(QFrame):

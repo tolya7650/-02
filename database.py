@@ -88,17 +88,14 @@ def authenticate(login):
         print(f"Ошибка БД: {e}")
         return None
 
-# --- ОБНОВЛЕНО ДЛЯ ПАРЫ 22 ---
 def save_order(user_id, cart_items):
     try:
         conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
         cursor = conn.cursor()
         
-        # 1. Проверяем, есть ли колонка status в orders
         cursor.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Новый';")
         conn.commit()
         
-        # 2. Проверяем остатки на складе
         for item in cart_items:
             product_id = item['product_id']
             quantity = item['quantity']
@@ -108,14 +105,12 @@ def save_order(user_id, cart_items):
                 conn.rollback()
                 return False, f"Недостаточно товара (ID {product_id}) на складе"
         
-        # 3. Вставляем сам заказ
         cursor.execute(
             "INSERT INTO orders (order_date, user_id, status) VALUES (CURRENT_DATE, %s, 'Новый') RETURNING order_id",
             (user_id,)
         )
         order_id = cursor.fetchone()[0]
         
-        # 4. Вставляем состав заказа и обновляем остатки
         for item in cart_items:
             product_id = item['product_id']
             quantity = item['quantity']
@@ -125,7 +120,6 @@ def save_order(user_id, cart_items):
                 "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)",
                 (order_id, product_id, quantity, price)
             )
-            # Уменьшаем остаток
             cursor.execute(
                 "UPDATE stock_items SET quantity = quantity - %s WHERE product_id = %s",
                 (quantity, product_id)
@@ -134,12 +128,29 @@ def save_order(user_id, cart_items):
                 conn.rollback()
                 return False, f"Нет остатков для товара (ID {product_id})"
             
-        # 5. Подтверждаем
         conn.commit()
         conn.close()
         return True, "Заказ оформлен"
     except Exception as e:
         print(f"Ошибка сохранения заказа: {e}")
+        if 'conn' in locals():
+            conn.rollback()
+        return False, str(e)
+
+# --- НОВОЕ ДЛЯ ПАРЫ 23 ---
+def delete_product(product_id):
+    try:
+        conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM products WHERE product_id = %s", (product_id,))
+        conn.commit()
+        conn.close()
+        return True, "Товар удалён"
+    except psycopg.errors.ForeignKeyViolation:
+        if 'conn' in locals():
+            conn.rollback()
+        return False, "Товар нельзя удалить: он есть в заказах"
+    except Exception as e:
         if 'conn' in locals():
             conn.rollback()
         return False, str(e)
