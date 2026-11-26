@@ -87,3 +87,40 @@ def authenticate(login):
     except Exception as e:
         print(f"Ошибка БД: {e}")
         return None
+
+# --- НОВОЕ ДЛЯ ПАРЫ 21 ---
+def save_order(user_id, cart_items):
+    try:
+        conn = psycopg.connect("host=localhost port=5432 dbname=formadessert user=postgres password=123")
+        cursor = conn.cursor()
+        
+        # 1. Проверяем, есть ли колонка status в orders
+        cursor.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Новый';")
+        conn.commit()
+        
+        # 2. Вставляем сам заказ
+        cursor.execute(
+            "INSERT INTO orders (order_date, user_id, status) VALUES (CURRENT_DATE, %s, 'Новый') RETURNING order_id",
+            (user_id,)
+        )
+        order_id = cursor.fetchone()[0]
+        
+        # 3. Вставляем состав заказа
+        for item in cart_items:
+            product_id = item['product_id']
+            quantity = item['quantity']
+            price = item['price']
+            cursor.execute(
+                "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)",
+                (order_id, product_id, quantity, price)
+            )
+            
+        # 4. Подтверждаем
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Ошибка сохранения заказа: {e}")
+        if 'conn' in locals():
+            conn.rollback()
+        return False

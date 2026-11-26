@@ -14,7 +14,10 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem
 )
 
-from database import PROJECT_DIR, fetch_catalog, fetch_product_by_id, authenticate, fetch_categories, update_product_image
+from database import (
+    PROJECT_DIR, fetch_catalog, fetch_product_by_id, authenticate, fetch_categories, 
+    update_product_image, save_order
+)
 
 RESOURCES = PROJECT_DIR / "resources"
 IMAGES = PROJECT_DIR / "images"
@@ -283,7 +286,6 @@ class MainWindow(QMainWindow):
         self.total_label.setStyleSheet("font-weight: bold; font-size: 16px;")
         layout.addWidget(self.total_label)
         
-        # --- ЗАДАНИЕ 2: QSpinBox для изменения количества ---
         change_layout = QHBoxLayout()
         change_layout.addWidget(QLabel("Новое количество:"))
         self.change_quantity_spin = QSpinBox()
@@ -299,6 +301,12 @@ class MainWindow(QMainWindow):
         remove_button = QPushButton("Удалить выбранное")
         remove_button.clicked.connect(self.remove_from_cart)
         layout.addWidget(remove_button)
+        
+        # --- НОВОЕ ДЛЯ ПАРЫ 21 ---
+        confirm_button = QPushButton("Оформить заказ")
+        confirm_button.setStyleSheet("background-color: #2E8B57; color: white; font-weight: bold; padding: 10px;")
+        confirm_button.clicked.connect(self.confirm_order)
+        layout.addWidget(confirm_button)
 
     def setup_orders_page(self):
         layout = QVBoxLayout(self.orders_page)
@@ -351,7 +359,6 @@ class MainWindow(QMainWindow):
         self.cart_table.setItem(row, 4, QTableWidgetItem(str(product_id)))
         self.update_total()
 
-    # --- ЗАДАНИЕ 2: Изменение количества ---
     def change_quantity(self):
         row = self.cart_table.currentRow()
         if row >= 0:
@@ -374,6 +381,28 @@ class MainWindow(QMainWindow):
         self.total_label.setText(f"Итого: {total} ₽")
         if self.cart_table.rowCount() == 0:
             self.total_label.setText("Итого: 0 ₽")
+
+    # --- ЗАДАНИЕ 1 и 2: Сохранение заказа ---
+    def confirm_order(self):
+        if self.cart_table.rowCount() == 0:
+            QMessageBox.warning(self, "Ошибка", "Корзина пуста")
+            return
+            
+        # Собираем товары из таблицы
+        cart_items = []
+        for row in range(self.cart_table.rowCount()):
+            product_id = int(self.cart_table.item(row, 4).text())
+            quantity = int(self.cart_table.item(row, 1).text())
+            price = float(self.cart_table.item(row, 2).text())
+            cart_items.append({'product_id': product_id, 'quantity': quantity, 'price': price})
+            
+        # Сохраняем в БД (функция из database.py)
+        if save_order(self.user_id, cart_items):
+            QMessageBox.information(self, "Успех", "Заказ оформлен")
+            self.cart_table.setRowCount(0)
+            self.update_total()
+        else:
+            QMessageBox.critical(self, "Ошибка", "Не удалось сохранить заказ")
 
 
 def main() -> int:
